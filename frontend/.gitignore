@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+*.tsbuildinfo
+.cache/
+.vite/
+*.log
+.DS_Store

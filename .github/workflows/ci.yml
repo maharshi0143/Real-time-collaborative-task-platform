@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            backend/node_modules
+            frontend/node_modules
+          key: node-modules-${{ hashFiles('backend/package-lock.json', 'frontend/package-lock.json') }}
+      - run: cd backend && npm ci
+      - run: cd frontend && npm ci
+      - run: cd backend && npm run lint
+      - run: cd frontend && npm run lint
+      - run: cd backend && npm run typecheck
+      - run: cd frontend && npm run typecheck
+
+  test-backend:
+    needs: lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: node-modules-${{ hashFiles('backend/package-lock.json') }}
+      - run: cd backend && npm ci
+      - run: cd backend && npx prisma generate
+      - run: cd backend && DATABASE_URL="postgresql://testuser:testpass@localhost:5432/testdb" npx prisma migrate deploy
+      - run: cd backend && DATABASE_URL="postgresql://testuser:testpass@localhost:5432/testdb" REDIS_URL="redis://localhost:6379" npm run test:coverage
+      - name: Check coverage
+        run: |
+          cd backend
+          npm run test:coverage -- --coverageThreshold '{"global":{"lines":60}}'
+
+  test-frontend:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: node-modules-${{ hashFiles('frontend/package-lock.json') }}
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm run build
+
+  security-scan:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cd backend && npm audit --audit-level=high || true
+      - run: cd frontend && npm audit --audit-level=high || true
+      - name: Build Docker images
+        run: |
+          docker compose -f infra/docker-compose.yml build backend
+          docker compose -f infra/docker-compose.yml build frontend
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "backend:latest"
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL"
+
+  docker-build:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-backend:${{ github.sha }}
+            ghcr.io/${{ github.repository }}-backend:latest
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+            ghcr.io/${{ github.repository }}-frontend:latest

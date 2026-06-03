@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 93%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 239 84% 67%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 239 84% 67%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .priority-critical { background-color: #ef4444; }
+  .priority-high { background-color: #f97316; }
+  .priority-medium { background-color: #eab308; }
+  .priority-low { background-color: #6b7280; }
+
+  .kanban-column {
+    @apply flex-shrink-0 w-[280px] bg-secondary/50 rounded-lg p-3;
+  }
+
+  .task-card {
+    @apply bg-white rounded-lg p-3 shadow-sm border border-border/50 cursor-grab
+           hover:shadow-md hover:-translate-y-0.5 transition-all duration-150;
+  }
+
+  .task-card-dragging {
+    @apply shadow-lg scale-[1.02] rotate-2 opacity-90;
+  }
+
+  .drawer-panel {
+    @apply fixed right-0 top-0 h-full w-[480px] bg-white shadow-xl z-50
+           transform transition-transform duration-250 ease-[cubic-bezier(0.16,1,0.3,1)];
+  }
+}
